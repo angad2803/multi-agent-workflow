@@ -24,6 +24,17 @@ Prompt Analyzer -> Research Agent -> Writing Agent
                               PostgreSQL result
 ```
 
+## Architecture & Visual Diagrams
+
+### System Architecture
+![System Architecture](assets/system-architecture.png)
+
+### Request Lifecycle
+![Request Lifecycle](assets/request-lifecycle.png)
+
+### Reliability Engineering
+![Reliability Diagram](assets/reliability-diagram.png)
+
 ## Features
 
 - 🚀 Multi-agent orchestration with explicit workflow state
