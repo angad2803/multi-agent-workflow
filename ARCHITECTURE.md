@@ -4,6 +4,8 @@ This document describes the current implementation of the asynchronous research-
 
 ## System Overview
 
+![System Architecture](assets/system-architecture.png)
+
 ```mermaid
 graph TB
     subgraph "Multi-Agent System - General Purpose"
@@ -41,6 +43,8 @@ graph TB
 ```
 
 ## Complete Task Lifecycle
+
+![Request Lifecycle](assets/request-lifecycle.png)
 
 ```mermaid
 stateDiagram-v2
@@ -274,6 +278,8 @@ LangGraph is compiled with `MemorySaver`. Its checkpoint data is therefore held 
 
 ## Failure and Recovery Behavior
 
+![Reliability Diagram](assets/reliability-diagram.png)
+
 1. The API creates a `PENDING` task, then queues `execute_workflow`.
 2. The worker claims the task in Redis and sets `RUNNING`.
 3. Transient workflow failures are retried up to three times with bounded exponential backoff and jitter. Configuration, authentication, and token-limit failures become `FAILED` without retry.
@@ -334,6 +340,8 @@ src/
     ├── redis_client.py        # Redis workspace operations
     ├── logger.py              # Structured JSON logging
     └── llm_provider.py        # LLM factory (Groq/OpenAI)
+scripts/
+└── demo_client.py             # CLI script to test/verify end-to-end task workflow
 ```
 
 ## Key Design Decisions
