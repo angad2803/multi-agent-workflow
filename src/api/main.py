@@ -2,10 +2,12 @@
 
 from contextlib import asynccontextmanager
 import os
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI, WebSocket
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.database.connection import init_db, close_db
@@ -59,8 +61,17 @@ app = FastAPI(
 )
 app.add_middleware(RateLimitMiddleware)
 
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
 # Include routers
 app.include_router(tasks_router)
+
+
+@app.get("/")
+async def dashboard() -> FileResponse:
+    """Serve the workflow visualization dashboard."""
+    return FileResponse(_STATIC_DIR / "dashboard.html")
 
 
 @app.get("/health")
