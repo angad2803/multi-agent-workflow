@@ -1,0 +1,103 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.13"
+  UV_VERSION: "0.5.0"
+
+jobs:
+  verify:
+    name: Build & Verify (E2E)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Docker Compose
+        run: sudo apt-get update && sudo apt-get install -y docker-compose
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install UV
+        run: pip install uv==${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+          LLM_PROVIDER=groq
+          LLM_MODEL=openai/gpt-oss-120b
+          API_PORT=8000
+          POSTGRES_USER=agent_user
+          POSTGRES_PASSWORD=password
+          POSTGRES_DB=agent_db
+          DATABASE_URL=postgresql+asyncpg://agent_user:password@db:5432/agent_db
+          REDIS_URL=redis://redis:6379/0
+          CELERY_BROKER_URL=redis://redis:6379/0
+          CELERY_RESULT_BACKEND=redis://redis:6379/1
+          TASK_RATE_LIMIT_REQUESTS=30
+          TASK_RATE_LIMIT_WINDOW_SECONDS=60
+          TASK_IDEMPOTENCY_TTL_SECONDS=86400
+          EOF
+
+      - name: Start Docker services
+        run: docker-compose up -d --wait --wait-timeout 120
+
+      - name: Check Docker services
+        run: docker-compose ps
+
+      - name: Check API container logs
+        run: docker-compose logs api
+
+      - name: Inspect API container
+        if: always()
+        run: |
+          CONTAINER_ID=$(docker-compose ps -q api)
+          if [ -n "$CONTAINER_ID" ]; then
+            docker inspect $CONTAINER_ID
+          else
+            echo "API container is not running."
+          fi
+
+      - name: Wait for API health
+        run: |
+          echo "Waiting for API to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8000/health; then
+              echo "API is ready!"
+              exit 0
+            fi
+            echo "Attempt $i: API not ready yet..."
+            sleep 2
+          done
+          echo "API failed to start within 60 seconds"
+          docker-compose logs api
+          exit 1
+
+      - name: Run End-to-End Tests
+        run: uv run pytest tests/test_e2e.py -v -m e2e --tb=short
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
+      - name: View logs on failure
+        if: failure()
+        run: |
+          docker-compose logs --tail=100 api
+          docker-compose logs --tail=100 worker
+
+      - name: Cleanup
+        if: always()
+        run: docker-compose down -v
